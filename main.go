@@ -7,30 +7,32 @@ import (
 	"github.com/spf13/viper"
 	"log"
 	"os"
+	"reflect"
 )
 
 var goroutineDelta = make(chan int)
 
 type Config struct {
-	Telegram struct {
-		Enabled  bool
-		APIToken string
-	}
-	Discord struct {
-		Enabled  bool
-		APIToken string
-	}
-	Reddit struct {
-		Enabled bool
-	}
-	IRC struct {
-		Enabled bool
+	Watchers struct {
+		Telegram struct {
+			Enabled  bool
+			APIToken string
+		}
+		Discord struct {
+			Enabled  bool
+			APIToken string
+		}
+		Reddit struct {
+			Enabled bool
+		}
+		IRC struct {
+			Enabled bool
+		}
 	}
 }
 
 type WatcherConfig struct {
 	Type     string
-	Enabled  bool
 	APIToken string
 }
 
@@ -54,33 +56,39 @@ func main() {
 		log.Panicf("Error parsing config file, %v \n", err)
 	}
 
-	discordConfig := WatcherConfig{
-		Type:     "Discord",
-		Enabled:  config.Discord.Enabled,
-		APIToken: config.Discord.APIToken,
+	v := reflect.ValueOf(config.Watchers).Type()
+	var watcherConfigs WatcherConfigs
+
+	// generate a list of WatcherConfigs
+	for i := 0; i < v.NumField(); i++ {
+		c := reflect.ValueOf(config.Watchers).Field(i)
+		enabled := c.FieldByName("Enabled")
+		token := c.FieldByName("APIToken")
+		// create a WatcherConfig with this iteration's watcher type
+		if enabled.Bool() == true {
+			watcherConfig := WatcherConfig{
+				Type:     v.Field(i).Name,
+				APIToken: token.String(),
+			}
+			watcherConfigs = append(watcherConfigs, watcherConfig)
+		}
 	}
 
-	telegramConfig := WatcherConfig{
-		Type:     "Telegram",
-		Enabled:  config.Telegram.Enabled,
-		APIToken: config.Telegram.APIToken,
-	}
+	numGoroutines := 0
 
-	watcherConfigs := WatcherConfigs{
-		telegramConfig,
-		discordConfig,
-	}
+	//urls := make(chan string)
 
 	// start watchers
 	for _, w := range watcherConfigs {
 		go w.startWatcher()
 	}
 
-	// TODO: send URLs back to main() via a channel
-	// TODO: add elasticsearch URL destination with metadata
-	// TODO: add metadata to URLs, e.g. HTTP response, HTML title, protocol
+	// start listening to watcher channels for URLs
 
-	numGoroutines := 0
+	// run metadata tasks for incoming URLs
+
+	// upload URL with metadata to ElasticSearch
+
 	for diff := range goroutineDelta {
 		numGoroutines += diff
 		if numGoroutines == 0 {
@@ -90,15 +98,11 @@ func main() {
 }
 
 func (c WatcherConfig) startWatcher() {
-	if c.Enabled != true {
-		log.Printf("[INFO] %s disabled - skipping", c.Type)
-	} else {
-		if c.Type == "Telegram" {
-			telegram.Run(c.APIToken)
-		}
-		if c.Type == "Discord" {
-			discord.Run(c.APIToken)
-		}
+	if c.Type == "Telegram" {
+		telegram.Run(c.APIToken)
+	}
+	if c.Type == "Discord" {
+		discord.Run(c.APIToken)
 	}
 	goroutineDelta <- +1
 	go f()
