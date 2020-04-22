@@ -28,6 +28,14 @@ type Config struct {
 	}
 }
 
+type WatcherConfig struct {
+	Type     string
+	Enabled  bool
+	APIToken string
+}
+
+type WatcherConfigs []WatcherConfig
+
 func main() {
 	// get configuration
 	var name = "awesome-piracy-bot"
@@ -46,12 +54,32 @@ func main() {
 		log.Panicf("Error parsing config file, %v \n", err)
 	}
 
+	discordConfig := WatcherConfig{
+		Type:     "Discord",
+		Enabled:  config.Discord.Enabled,
+		APIToken: config.Discord.APIToken,
+	}
+
+	telegramConfig := WatcherConfig{
+		Type:     "Telegram",
+		Enabled:  config.Telegram.Enabled,
+		APIToken: config.Telegram.APIToken,
+	}
+
+	watcherConfigs := WatcherConfigs{
+		telegramConfig,
+		discordConfig,
+	}
+
+	// start watchers
+	for _, w := range watcherConfigs {
+		go w.startWatcher()
+	}
+
 	// TODO: send URLs back to main() via a channel
 	// TODO: add elasticsearch URL destination with metadata
 	// TODO: add metadata to URLs, e.g. HTTP response, HTML title, protocol
-	// start watchers
-	go startTelegram(config.Telegram.APIToken, config.Telegram.Enabled)
-	go startDiscord(config.Discord.APIToken, config.Discord.Enabled)
+
 	numGoroutines := 0
 	for diff := range goroutineDelta {
 		numGoroutines += diff
@@ -61,21 +89,16 @@ func main() {
 	}
 }
 
-func startTelegram(apiToken string, enabled bool) {
-	if enabled != true {
-		log.Printf("[INFO] Telegram disabled - skipping")
+func (c WatcherConfig) startWatcher() {
+	if c.Enabled != true {
+		log.Printf("[INFO] %s disabled - skipping", c.Type)
 	} else {
-		telegram.Run(apiToken)
-	}
-	goroutineDelta <- +1
-	go f()
-}
-
-func startDiscord(apiToken string, enabled bool) {
-	if enabled != true {
-		log.Printf("[INFO] Discord disabled - skipping")
-	} else {
-		discord.Run(apiToken)
+		if c.Type == "Telegram" {
+			telegram.Run(c.APIToken)
+		}
+		if c.Type == "Discord" {
+			discord.Run(c.APIToken)
+		}
 	}
 	goroutineDelta <- +1
 	go f()

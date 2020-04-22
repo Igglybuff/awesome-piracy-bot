@@ -20,7 +20,7 @@ func (c DiscordConfig) watchDiscord() {
 		log.Panicf("[DISCORD] Fatal error! %s", err)
 	}
 
-	dg.AddHandler(messageCreate)
+	dg.AddHandler(messageWatch)
 
 	err = dg.Open()
 	if err != nil {
@@ -38,7 +38,7 @@ func (c DiscordConfig) watchDiscord() {
 	}
 }
 
-func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
+func messageWatch(s *discordgo.Session, m *discordgo.MessageCreate) {
 	if m.Author.ID == s.State.User.ID {
 		return
 	}
